@@ -12,9 +12,9 @@ import math
 
 
 IGNORE_INDEX = -100
-DEFAULT_PAD_TOKEN = "<|pad|>"
-DEFAULT_EOS_TOKEN = "<|endoftext|>"
-DEFAULT_UNK_TOKEN = "<|unk|>"
+DEFAULT_PAD_TOKEN = "</s>"
+DEFAULT_EOS_TOKEN = "</s>"
+DEFAULT_UNK_TOKEN = "<unk>"
 
 
 def _tokenize_fn(
@@ -78,7 +78,7 @@ class SupervisedDataset(Dataset):
         logging.warning(f"TOKENIZING WITH NUM_WORKERS: {workers}")
 
         # Loading the Wikipedia dataset
-        dataset = datasets.load_dataset("wikipedia", "20220301.fa", split="train")
+        dataset = datasets.load_dataset("aghilrs/fawiki20231001", split="train")
 
         # Filtering and preprocessing
         dataset = (
