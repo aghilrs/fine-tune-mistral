@@ -489,7 +489,7 @@ if __name__ == "__main__":
                 )
 
             # runs eval 2x an epoch, adjust as needed
-            if should_run_eval(total_steps_per_epoch, 2, current_step):
+            if should_run_eval(total_steps_per_epoch, 50, current_step):
                 validation_loss = evaluation(
                     model,
                     val_loader,
