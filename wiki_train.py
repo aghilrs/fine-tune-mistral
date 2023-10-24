@@ -61,12 +61,7 @@ def setup_model(model_name, max_length):
 
     tokenizer = transformers.AutoTokenizer.from_pretrained(
         model_name,
-        model_max_length=max_length,
-        padding_side="right",
-        use_fast=False,
-        pad_token=DEFAULT_PAD_TOKEN,
-        use_auth_token=os.environ["HF_TOKEN"],
-        trust_remote_code=True,
+        model_max_length=max_length
     )
 
     special_tokens_dict = dict()
@@ -184,16 +179,12 @@ def get_parameter_names(model, forbidden_layer_types):
 def get_optimizer(model, lr, weight_decay):
     decay_parameters = get_parameter_names(model, [torch.nn.LayerNorm])
     decay_parameters = [name for name in decay_parameters if "bias" not in name]
-    # Define a function to check if a parameter is in the first 3 or last 3 layers
-    def in_target_layers(name):
-        return "layers.0" in name or "layers.1" in name or "layers.2" in name or "layers.29" in name or "layers.30" in name or "layers.31" in name
-
     optimizer_grouped_parameters = [
         {
             "params": [
                 p
                 for n, p in model.named_parameters()
-                if (n in decay_parameters and p.requires_grad and in_target_layers(n))
+                if (n in decay_parameters and p.requires_grad)
             ],
             "weight_decay": weight_decay,
         },
@@ -201,7 +192,7 @@ def get_optimizer(model, lr, weight_decay):
             "params": [
                 p
                 for n, p in model.named_parameters()
-                if (n not in decay_parameters and p.requires_grad and in_target_layers(n))
+                if (n not in decay_parameters and p.requires_grad)
             ],
             "weight_decay": 0.0,
         },
@@ -244,7 +235,7 @@ def get_all_reduce_mean(tensor):
     return tensor
 
 
-def get_warmup_steps(num_training_steps, warmup_ratio=0.05):
+def get_warmup_steps(num_training_steps, warmup_ratio=0.02):
     return math.ceil(num_training_steps * warmup_ratio)
 
 
@@ -290,7 +281,7 @@ if __name__ == "__main__":
 
     model_name = "aghilrs/Mistral-7B-v0.1-Persian-v0.1"
     scheduler_type = "cosine"
-    seed = 877645  # set your seed
+    seed = 877646  # set your seed
     transformers.set_seed(seed)
 
     run_id = str(uuid.uuid4())
@@ -308,7 +299,7 @@ if __name__ == "__main__":
     lr = 2e-05  # adjust as needed
     weight_decay = 0.0  # adjust as needed
     gradient_clipping = 1.0  # adjust as needed
-    train_on_inputs = False  # whether to train on instruction tokens
+    train_on_inputs = True  # whether to train on instruction tokens
     use_multipack_sampler = (
         True  # whether to use the multipack sampler or torch sampler
     )
@@ -339,22 +330,22 @@ if __name__ == "__main__":
     model = FSDP(model, **fsdp_config)
 
     # Freeze all model parameters
-    for param in model.parameters():
-        param.requires_grad = False
+    # for param in model.parameters():
+    #     param.requires_grad = False
 
     # Unfreeze the selected parameters
-    for name, param in model.named_parameters():
-        if "layers.0" in name or "layers.1" in name or "layers.2" in name or "layers.29" in name or "layers.30" in name or "layers.31" in name:
-            param.requires_grad = True
-        elif isinstance(param, torch.nn.LayerNorm):  # Unfreeze all LayerNorm layers
-            param.requires_grad = True
+    # for name, param in model.named_parameters():
+    #     if "embed_tokens" in name or "lm_head" in name or "norm" in name or "layers.0" in name or "layers.1" in name or "layers.2" in name or "layers.29" in name or "layers.30" in name or "layers.31" in name:
+    #         param.requires_grad = True
+    #     elif isinstance(param, torch.nn.LayerNorm):  # Unfreeze all LayerNorm layers
+    #         param.requires_grad = True
             
     optimizer = get_optimizer(model, lr, weight_decay)
 
     wiki_dataset = SupervisedDataset(tokenizer)
 
     # Split the Wikipedia dataset into training and validation subsets
-    train_size = int(0.9 * len(wiki_dataset))
+    train_size = int(0.999 * len(wiki_dataset))
     val_size = len(wiki_dataset) - train_size
     train_dataset, val_dataset = torch.utils.data.random_split(wiki_dataset, [train_size, val_size])
 
@@ -399,7 +390,7 @@ if __name__ == "__main__":
 
     if local_rank == 0:
         run = wandb.init(
-            project="mistral-7b",
+            project="mistral-7b-translate",
             name=run_id,
             config={
                 "model_name": model_name,
@@ -488,15 +479,7 @@ if __name__ == "__main__":
                     scheduler,
                 )
 
-            # runs eval 2x an epoch, adjust as needed
-            if should_run_eval(total_steps_per_epoch, 50, current_step):
-                validation_loss = evaluation(
-                    model,
-                    val_loader,
-                    wandb,
-                    local_rank,
-                )
-
+            if should_run_eval(total_steps_per_epoch, 10, current_step):
                 # saves model 2x an epoch, adjust as needed above
                 save_model(
                     local_rank,
@@ -506,6 +489,17 @@ if __name__ == "__main__":
                     current_epoch,
                     current_step,
                 )
+
+            # runs eval 2x an epoch, adjust as needed
+            if should_run_eval(total_steps_per_epoch, 1, current_step):
+                validation_loss = evaluation(
+                    model,
+                    val_loader,
+                    wandb,
+                    local_rank,
+                )
+
+            
 
                 model.train()
 

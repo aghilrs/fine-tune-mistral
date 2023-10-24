@@ -78,7 +78,8 @@ class SupervisedDataset(Dataset):
         logging.warning(f"TOKENIZING WITH NUM_WORKERS: {workers}")
 
         # Loading the Wikipedia dataset
-        dataset = datasets.load_dataset("aghilrs/fawiki20231001", split="train")
+        # dataset = datasets.load_dataset("aghilrs/fawiki20231001", split="train")
+        dataset = datasets.load_dataset("aghilrs/journals-translation-text")
 
         # Filtering and preprocessing
         dataset = (
