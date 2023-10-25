@@ -436,6 +436,9 @@ if __name__ == "__main__":
             disable=(local_rank != 0),
         )
 
+        accumulated_loss = 0.0
+        logging_loss_accumulator = 0.0  # New accumulator for logging
+        optimizer.zero_grad(set_to_none=True)
         for step, batch in pbar:
             current_step = step + 1
 
@@ -449,35 +452,46 @@ if __name__ == "__main__":
             outputs = model(**inputs)
             loss = outputs.loss
 
-            # backward
-            loss.backward()
-
-            # clipping
-            if clip_gradients:
-                grad_norm = clip_model_gradients(model, gradient_clipping)
-
-            # weight update
-            optimizer.step()
-            scheduler.step()
-
-            # zero gradients after weight update
-            optimizer.zero_grad(set_to_none=True)
+            accumulated_loss += loss.float()
 
             # detach from graph
             loss = loss.detach()
 
-            # avg loss over all processes
-            loss = get_all_reduce_mean(loss).item()
+            # accumulate detached loss for logging
+            logging_loss_accumulator += get_all_reduce_mean(loss).item()
 
-            if local_rank == 0:
-                log_stats(
-                    pbar,
-                    wandb,
-                    round((current_step / total_steps_per_epoch), 2) + epoch,
-                    loss,
-                    grad_norm,
-                    scheduler,
-                )
+            # Gradient accumulation logic
+            if (step + 1) % acc_steps == 0 or (step + 1) == len(train_loader):
+                accumulated_loss = accumulated_loss / acc_steps
+                accumulated_loss.backward()
+
+                if clip_gradients:
+                    grad_norm = clip_model_gradients(model, gradient_clipping)
+
+                optimizer.step()
+                scheduler.step()
+                # zero gradients after weight update
+                optimizer.zero_grad(set_to_none=True)
+
+                accumulated_loss = 0.0
+
+                # log every acc_steps (or at the last step)
+                if local_rank == 0:
+                    avg_loss = logging_loss_accumulator / acc_steps
+                    log_stats(
+                        pbar,
+                        wandb,
+                        round((current_step / total_steps_per_epoch), 2) + epoch,
+                        avg_loss,
+                        grad_norm,
+                        scheduler,
+                    )
+                logging_loss_accumulator = 0.0  # reset the accumulator after logging
+
+
+
+
+
 
             if should_run_eval(total_steps_per_epoch, 10, current_step):
                 # saves model 2x an epoch, adjust as needed above

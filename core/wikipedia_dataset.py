@@ -79,7 +79,7 @@ class SupervisedDataset(Dataset):
 
         # Loading the Wikipedia dataset
         # dataset = datasets.load_dataset("aghilrs/fawiki20231001", split="train")
-        dataset = datasets.load_dataset("aghilrs/journals-translation-text")
+        dataset = datasets.load_dataset("aghilrs/journals-translation-text", split="train")
 
         # Filtering and preprocessing
         dataset = (
