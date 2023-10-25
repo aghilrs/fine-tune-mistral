@@ -130,6 +130,7 @@ ENV/
 env.bak/
 venv.bak/
 wandb/
+scripts/
 
 # Spyder project settings
 .spyderproject
