@@ -295,7 +295,7 @@ if __name__ == "__main__":
     train_batch_size = 2  # adjust as needed
     validation_batch_size = 2  # adjust as needed
     epochs = 3  # adjust as needed
-    acc_steps = 0  # TODO: not implemented here yet
+    acc_steps = 4  # TODO: not implemented here yet
     lr = 2e-05  # adjust as needed
     weight_decay = 0.0  # adjust as needed
     gradient_clipping = 1.0  # adjust as needed
@@ -436,9 +436,9 @@ if __name__ == "__main__":
             disable=(local_rank != 0),
         )
 
-        accumulated_loss = 0.0
-        logging_loss_accumulator = 0.0  # New accumulator for logging
+        
         optimizer.zero_grad(set_to_none=True)
+        grad_norm = None
         for step, batch in pbar:
             current_step = step + 1
 
@@ -450,20 +450,19 @@ if __name__ == "__main__":
 
             # forward
             outputs = model(**inputs)
-            loss = outputs.loss
-
-            accumulated_loss += loss.float()
+            loss = outputs.loss / acc_steps  # Divide the loss immediately
+            loss.backward() 
+            #accumulated_loss += loss.float()
 
             # detach from graph
-            loss = loss.detach()
+            #loss = loss.detach()
 
             # accumulate detached loss for logging
-            logging_loss_accumulator += get_all_reduce_mean(loss).item()
+            #logging_loss_accumulator += get_all_reduce_mean(loss).item()
 
             # Gradient accumulation logic
-            if (step + 1) % acc_steps == 0 or (step + 1) == len(train_loader):
-                accumulated_loss = accumulated_loss / acc_steps
-                accumulated_loss.backward()
+            if current_step % acc_steps == 0 or current_step == total_steps_per_epoch:
+
 
                 if clip_gradients:
                     grad_norm = clip_model_gradients(model, gradient_clipping)
@@ -473,23 +472,20 @@ if __name__ == "__main__":
                 # zero gradients after weight update
                 optimizer.zero_grad(set_to_none=True)
 
-                accumulated_loss = 0.0
+            # detach from graph
+            detached_loss = loss.detach() * acc_steps  # Multiply back to get the original loss for logging
+            detached_loss = get_all_reduce_mean(detached_loss).item()
 
-                # log every acc_steps (or at the last step)
-                if local_rank == 0:
-                    avg_loss = logging_loss_accumulator / acc_steps
-                    log_stats(
-                        pbar,
-                        wandb,
-                        round((current_step / total_steps_per_epoch), 2) + epoch,
-                        avg_loss,
-                        grad_norm,
-                        scheduler,
-                    )
-                logging_loss_accumulator = 0.0  # reset the accumulator after logging
-
-
-
+            # log every acc_steps (or at the last step)
+            if local_rank == 0:
+                log_stats(
+                    pbar,
+                    wandb,
+                    round((current_step / total_steps_per_epoch), 2) + epoch,
+                    detached_loss,
+                    grad_norm,
+                    scheduler,
+                )
 
 
 

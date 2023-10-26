@@ -9,6 +9,7 @@ import torch
 import transformers
 import copy
 import math
+from random import seed
 
 
 IGNORE_INDEX = -100
@@ -79,7 +80,7 @@ class SupervisedDataset(Dataset):
 
         # Loading the Wikipedia dataset
         # dataset = datasets.load_dataset("aghilrs/fawiki20231001", split="train")
-        dataset = datasets.load_dataset("aghilrs/journals-translation-text", split="train")
+        dataset = datasets.load_dataset("aghilrs/tebyan-p1", split="train")
 
         # Filtering and preprocessing
         dataset = (
@@ -98,7 +99,7 @@ class SupervisedDataset(Dataset):
         )
 
         if limit:
-            dataset = dataset.select(range(limit))
+            dataset = dataset.shuffle(seed=42).select(range(limit))
 
         self.input_ids = dataset["input_ids"]
         self.labels = dataset["labels"]

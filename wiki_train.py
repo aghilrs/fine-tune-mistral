@@ -47,14 +47,14 @@ def disable_model_dropout(model: torch.nn.Module):
 def setup_model(model_name, max_length):
     config = transformers.AutoConfig.from_pretrained(
         model_name,
-        use_auth_token=os.environ["HF_TOKEN"],
+ #       use_auth_token=os.environ["HF_TOKEN"],
     )
 
     config.use_cache = False
 
     model = transformers.AutoModelForCausalLM.from_pretrained(
         model_name,
-        use_auth_token=os.environ["HF_TOKEN"],
+#        use_auth_token=os.environ["HF_TOKEN"],
         config=config,
         torch_dtype=torch.bfloat16,
     )
@@ -235,7 +235,7 @@ def get_all_reduce_mean(tensor):
     return tensor
 
 
-def get_warmup_steps(num_training_steps, warmup_ratio=0.02):
+def get_warmup_steps(num_training_steps, warmup_ratio=0.05):
     return math.ceil(num_training_steps * warmup_ratio)
 
 
@@ -279,9 +279,9 @@ if __name__ == "__main__":
     torch.cuda.set_device(local_rank)
     dist.init_process_group("nccl", rank=local_rank, world_size=world_size)
 
-    model_name = "aghilrs/Mistral-7B-v0.1-Persian-v0.5"
+    model_name = "aghilrs/Mistral-7B-v0.1-Persian-v0.7"
     scheduler_type = "cosine"
-    seed = 877646  # set your seed
+    seed = 877647  # set your seed
     transformers.set_seed(seed)
 
     run_id = str(uuid.uuid4())
@@ -294,7 +294,7 @@ if __name__ == "__main__":
     shuffle = True  # multipack sampler already does random sampling
     train_batch_size = 2  # adjust as needed
     validation_batch_size = 2  # adjust as needed
-    epochs = 3  # adjust as needed
+    epochs = 2  # adjust as needed
     acc_steps = 0  # TODO: not implemented here yet
     lr = 2e-05  # adjust as needed
     weight_decay = 0.0  # adjust as needed
@@ -342,10 +342,10 @@ if __name__ == "__main__":
             
     optimizer = get_optimizer(model, lr, weight_decay)
 
-    wiki_dataset = SupervisedDataset(tokenizer)
+    wiki_dataset = SupervisedDataset(tokenizer,limit=None)
 
     # Split the Wikipedia dataset into training and validation subsets
-    train_size = int(0.999 * len(wiki_dataset))
+    train_size = int(0.99 * len(wiki_dataset))
     val_size = len(wiki_dataset) - train_size
     train_dataset, val_dataset = torch.utils.data.random_split(wiki_dataset, [train_size, val_size])
 
@@ -390,7 +390,7 @@ if __name__ == "__main__":
 
     if local_rank == 0:
         run = wandb.init(
-            project="mistral-7b-translate",
+            project="mistral-7b-persian",
             name=run_id,
             config={
                 "model_name": model_name,
